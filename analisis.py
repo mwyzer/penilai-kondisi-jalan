@@ -70,7 +70,7 @@ def _jpeg_b64(img: Image.Image) -> str:
     return base64.standard_b64encode(buf.getvalue()).decode()
 
 
-def analisis_foto(data: bytes, konteks: str, api_key: Optional[str] = None) -> HasilAnalisis:
+def analisis_claude(data: bytes, konteks: str, api_key: Optional[str] = None) -> HasilAnalisis:
     img = siapkan_foto(data)
     try:
         client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()

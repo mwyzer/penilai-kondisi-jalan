@@ -1,5 +1,6 @@
 """Penilai Kondisi Jalan — versi Streamlit (penilaian manual, SDI dihitung otomatis)."""
 import json
+import os
 from datetime import date
 from html import escape
 
@@ -7,7 +8,9 @@ import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
-from analisis import WARNA_JENIS, AnalisisGagal, analisis_foto, gambar_kotak, nilai_lembar
+from analisis import WARNA_JENIS, AnalisisGagal, analisis_claude, gambar_kotak, nilai_lembar
+from analisis_deepseek import analisis_deepseek
+from analisis import HasilAnalisis
 from exif_gps import baca_gps, maps_link
 from sdi import ALUR_OPSI, KELAS, LEBAR_OPSI, compute_sdi, fmt_sdi, kelas_dari_label
 from storage import EXAMPLE_LOG, load_log, save_log, to_csv, to_geojson
@@ -34,11 +37,20 @@ def baca_koordinat():
     return (lat, lon) if abs(lat) <= 90 and abs(lon) <= 180 else None
 
 
-def api_key():
+def pengaturan(nama: str, default=None):
+    """Baca dari .streamlit/secrets.toml, lalu dari environment variable."""
     try:
-        return st.secrets.get("ANTHROPIC_API_KEY")
-    except Exception:  # tidak ada secrets.toml: SDK membaca ANTHROPIC_API_KEY dari environment
-        return None
+        if nama in st.secrets:
+            return st.secrets[nama]
+    except Exception:  # tidak ada secrets.toml
+        pass
+    return os.environ.get(nama, default)
+
+
+def analisis_ai(data: bytes, konteks: str) -> HasilAnalisis:
+    if pengaturan("AI_PROVIDER", "deepseek") == "claude":
+        return analisis_claude(data, konteks, pengaturan("ANTHROPIC_API_KEY"))
+    return analisis_deepseek(data, konteks, pengaturan("DEEPSEEK_API_KEY"))
 
 
 def jalankan_analisis():
@@ -50,7 +62,7 @@ def jalankan_analisis():
     st.session_state.analisis_err = None
     try:
         with st.spinner("Claude sedang memeriksa foto… biasanya 10–60 detik."):
-            h = analisis_foto(f.getvalue(), konteks, api_key())
+            h = analisis_ai(f.getvalue(), konteks)
     except AnalisisGagal as e:
         st.session_state.analisis_err = str(e)
         return

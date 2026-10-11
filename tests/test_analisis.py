@@ -9,7 +9,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import analisis  # noqa: E402
-from analisis import AnalisisGagal, HasilAnalisis, analisis_foto, gambar_kotak, nilai_lembar  # noqa: E402
+from analisis import AnalisisGagal, HasilAnalisis, analisis_claude, gambar_kotak, nilai_lembar  # noqa: E402
 
 CONTOH = HasilAnalisis(
     jalan_terlihat=True, jenis_perkerasan="aspal", deskripsi="Jalan aspal berlubang.",
@@ -57,7 +57,7 @@ def test_gambar_kotak_kecil_dan_aman():
 def test_permintaan_berisi_foto_dan_skema(monkeypatch):
     client = _FakeClient(SimpleNamespace(stop_reason="end_turn", parsed_output=CONTOH))
     _pakai(monkeypatch, client)
-    assert analisis_foto(_foto(fmt="PNG"), "Konteks: uji") is CONTOH
+    assert analisis_claude(_foto(fmt="PNG"), "Konteks: uji") is CONTOH
     kw = client.kwargs
     assert kw["model"] == "claude-opus-5-5" and kw["output_format"] is HasilAnalisis
     img_block, txt_block = kw["messages"][0]["content"]
@@ -69,10 +69,10 @@ def test_permintaan_berisi_foto_dan_skema(monkeypatch):
 def test_jawaban_tidak_terpakai(monkeypatch, resp):
     _pakai(monkeypatch, _FakeClient(resp))
     with pytest.raises(AnalisisGagal):
-        analisis_foto(_foto(), "x")
+        analisis_claude(_foto(), "x")
 
 
 def test_tanpa_api_key(monkeypatch):
     _pakai(monkeypatch, _FakeClient(error=TypeError("Could not resolve authentication method.")))
     with pytest.raises(AnalisisGagal, match="API key"):
-        analisis_foto(_foto(), "x")
+        analisis_claude(_foto(), "x")

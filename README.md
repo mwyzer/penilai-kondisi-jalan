@@ -15,22 +15,32 @@ Buka http://localhost:8501.
 
 ## Analisis foto otomatis (opsional)
 
-Tombol **Analisis foto otomatis** mengirim foto ke Claude (`claude-opus-5-5`), lalu mengisi lembar hitung SDI dan menandai kerusakan di foto.
+Tombol **Analisis foto otomatis** mengirim foto ke model AI, lalu mengisi lembar hitung SDI dan menandai kerusakan di foto.
 Semua angka tetap bisa dikoreksi. Tanpa API key, aplikasi tetap bisa dipakai secara manual.
 
-1. Buat API key di https://console.anthropic.com.
-2. Atur key dengan salah satu cara berikut:
-   - environment variable `ANTHROPIC_API_KEY`, atau
-   - berkas `.streamlit/secrets.toml` berisi `ANTHROPIC_API_KEY = "sk-ant-..."` (jangan dibagikan atau di-commit).
-3. Jalankan ulang `streamlit run app.py`.
+Ada dua penyedia AI; pilih lewat `AI_PROVIDER` di `.streamlit/secrets.toml`:
 
-Setiap analisis memakai kredit API (biayanya kecil per foto). Lebar retak dan kedalaman alur hanyalah perkiraan visual dari foto.
+| `AI_PROVIDER` | Model | Kunci yang dibutuhkan | Daftar kunci |
+|---|---|---|---|
+| `deepseek` (default) | `deepseek-flash` | `DEEPSEEK_API_KEY` | https://platform.deepseek.com |
+| `claude` | `claude-opus-5-5` | `ANTHROPIC_API_KEY` | https://console.anthropic.com |
+
+Contoh `.streamlit/secrets.toml`:
+
+```toml
+AI_PROVIDER = "deepseek"
+DEEPSEEK_API_KEY = "isi-kunci-deepseek"
+# ANTHROPIC_API_KEY = "isi-kunci-claude"  # hanya bila AI_PROVIDER = "claude"
+```
+
+Jalankan ulang `streamlit run app.py` setelah mengubah berkas ini. Setiap analisis memakai kredit API (biayanya kecil per foto). Lebar retak dan kedalaman alur hanyalah perkiraan visual dari foto.
 
 ## Berkas
 
 - `app.py` — antarmuka Streamlit
 - `sdi.py` — rumus SDI dan kelas kondisi
-- `analisis.py` — analisis foto dengan Claude
+- `analisis.py` — analisis foto dengan Claude (dan skema hasil AI bersama)
+- `analisis_deepseek.py` — analisis foto dengan DeepSeek
 - `exif_gps.py` — membaca GPS/waktu dari foto
 - `storage.py` — daftar segmen (`data/segmen.json`), ekspor CSV & GeoJSON
 - `tests/` — `pytest`
