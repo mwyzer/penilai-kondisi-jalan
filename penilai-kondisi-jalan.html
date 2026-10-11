@@ -1,0 +1,568 @@
+<title>Penilai Kondisi Jalan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: field-survey form — photo + AI findings on the left, SDI calculation sheet on the right, segment log below */
+:root {
+  --bg: #eef0ec;          /* concrete */
+  --panel: #fbfcfa;
+  --fg: #1c2124;          /* asphalt */
+  --muted: #5d676b;
+  --line: #d5d9d3;
+  --accent: #c77a00;      /* hi-vis amber, road works */
+  --accent-ink: #ffffff;
+  --ok: #2f7d46; --mid: #a48400; --warn: #c3561b; --bad: #b3261e;
+  --ok-bg: #e2f1e6; --mid-bg: #f5efcc; --warn-bg: #f8e3d6; --bad-bg: #f6dcd9;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15191b; --panel: #1d2326; --fg: #e6e9e6; --muted: #9aa4a7; --line: #313a3e;
+  --accent: #f0a32a; --accent-ink: #1a1400;
+  --ok: #6cc489; --mid: #e0c64e; --warn: #f08c55; --bad: #f2786e;
+  --ok-bg: #1d3325; --mid-bg: #36301a; --warn-bg: #3a2519; --bad-bg: #3d1f1d;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15191b; --panel: #1d2326; --fg: #e6e9e6; --muted: #9aa4a7; --line: #313a3e;
+  --accent: #f0a32a; --accent-ink: #1a1400;
+  --ok: #6cc489; --mid: #e0c64e; --warn: #f08c55; --bad: #f2786e;
+  --ok-bg: #1d3325; --mid-bg: #36301a; --warn-bg: #3a2519; --bad-bg: #3d1f1d;
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--font-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: .01em }
+h1 { font-size: 2rem; font-weight: 700; line-height: 1.1 }
+h2 { font-size: 1.25rem; font-weight: 600 }
+.eyebrow { font: 500 .72rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+.muted { color: var(--muted) }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums }
+
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; border-bottom: 3px solid var(--fg); padding-bottom: 12px; position: relative }
+header.top::after { content: ""; position: absolute; left: 0; right: 0; bottom: -9px; height: 3px;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 28px, transparent 28px 44px) }
+header.top p { margin: 4px 0 0; max-width: 60ch; color: var(--muted) }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0 }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px }
+label.f { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); min-width: 0 }
+input[type=text], input[type=number], select {
+  font: 500 .92rem var(--font-body); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; width: 100%; min-width: 0 }
+input:focus-visible, select:focus-visible, button:focus-visible, .drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+.drop { position: relative; border: 2px dashed var(--line); border-radius: 6px; background: var(--bg); overflow: hidden; cursor: pointer; min-height: 220px; display: grid; place-items: center }
+.drop.over { border-color: var(--accent) }
+.drop.has { border-style: solid; cursor: default; display: block; min-height: 0 }
+.drop .hint { text-align: center; padding: 24px; color: var(--muted); display: grid; gap: 6px }
+.drop .hint strong { color: var(--fg); font-family: var(--font-display); font-size: 1.15rem }
+.stage { position: relative; line-height: 0 }
+.stage img { width: 100%; display: block }
+.box { position: absolute; border: 2px solid var(--c, var(--accent)); border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.35) }
+.box span { position: absolute; left: -2px; top: -2px; transform: translateY(-100%); background: var(--c, var(--accent)); color: #fff;
+  font: 500 .66rem/1.5 var(--font-mono); padding: 0 5px; white-space: nowrap; border-radius: 2px 2px 0 0 }
+.sample-tag { position: absolute; top: 10px; left: 10px; background: var(--fg); color: var(--bg); font: 500 .7rem/1 var(--font-mono); padding: 5px 8px; border-radius: 3px; letter-spacing: .08em; text-transform: uppercase }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+button { font: 600 .9rem var(--font-body); border-radius: 4px; padding: 9px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--fg) }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink) }
+button:disabled { opacity: .5; cursor: not-allowed }
+button.link { background: none; border: none; padding: 4px; color: var(--muted); text-decoration: underline; font-weight: 500 }
+.status { font-size: .85rem; color: var(--muted); min-height: 1.4em }
+.status.err { color: var(--bad) }
+
+.findings { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none }
+.findings li { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line) }
+.findings li:first-child { border-top: 0 }
+.dot { width: 10px; height: 10px; border-radius: 2px; margin-top: 6px; background: var(--c) }
+.sev { font: 500 .72rem/1 var(--font-mono); padding: 4px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: .06em }
+.sev.ringan { background: var(--ok-bg); color: var(--ok) } .sev.sedang { background: var(--mid-bg); color: var(--mid) } .sev.berat { background: var(--bad-bg); color: var(--bad) }
+.desc { margin: 0; max-width: 65ch }
+
+/* SDI sheet */
+.verdict { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 4px 16px; align-items: center; padding: 14px; border-radius: 5px; background: var(--vbg); color: var(--vfg) }
+.verdict .num { font: 700 3.2rem/1 var(--font-display); grid-row: span 2; font-variant-numeric: tabular-nums }
+.verdict .cls { font: 700 1.4rem/1.1 var(--font-display); text-transform: uppercase; letter-spacing: .03em }
+.verdict .act { font-size: .88rem }
+.scale { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; font: 500 .68rem/1.2 var(--font-mono) }
+.scale div { padding: 6px 4px 4px; border-top: 4px solid var(--c); color: var(--muted) }
+.scale div.on { color: var(--fg); font-weight: 600 }
+table.calc { width: 100%; border-collapse: collapse; font-size: .88rem }
+table.calc td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: middle }
+table.calc td:last-child { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 8px }
+table.calc td.in { width: 44%; padding-left: 8px }
+table.calc tr.total td { border-top: 2px solid var(--fg); font-weight: 600 }
+.note { font-size: .8rem; color: var(--muted); margin: 0 }
+.conf { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted) }
+.conf .bar { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden }
+.conf .bar i { display: block; height: 100%; background: var(--accent) }
+
+/* log */
+.tally { display: flex; flex-wrap: wrap; gap: 8px }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 500 .78rem/1 var(--font-mono); padding: 6px 9px; border-radius: 3px; background: var(--cbg); color: var(--c) }
+.tablewrap { overflow-x: auto }
+table.log { width: 100%; border-collapse: collapse; font-size: .86rem; min-width: 560px }
+table.log th { text-align: left; font: 500 .7rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 8px 6px; border-bottom: 2px solid var(--fg) }
+table.log td { padding: 8px 6px; border-bottom: 1px solid var(--line) }
+table.log td.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums }
+table.log tr.ex td { color: var(--muted); font-style: italic }
+.empty { color: var(--muted); font-size: .9rem; padding: 8px 0 }
+.gps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: .82rem; padding: 8px 10px; border-radius: 4px; background: var(--gbg, var(--bg)); color: var(--gfg, var(--muted)) }
+.gps.ok { --gbg: var(--ok-bg); --gfg: var(--ok) } .gps.none { --gbg: var(--warn-bg); --gfg: var(--warn) }
+.gps strong { font-family: var(--font-mono); font-weight: 500 }
+.gps a { color: inherit }
+.mapwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--bg) }
+.mapwrap svg { display: block; width: 100%; min-width: 520px; height: auto }
+.mapwrap text { font-family: var(--font-mono); font-size: 11px; fill: var(--muted) }
+.mapwrap .pt circle { stroke: var(--panel); stroke-width: 2 }
+.mapwrap .pt:hover circle, .mapwrap .pt:focus circle { stroke: var(--fg) }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .8rem; color: var(--muted) }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; background: var(--c) }
+@media (prefers-reduced-motion: no-preference) { .box { animation: pop .35s ease-out both } @keyframes pop { from { transform: scale(.92); opacity: .3 } } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Survei kondisi perkerasan · metode SDI Bina Marga</div>
+      <h1>Penilai Kondisi Jalan</h1>
+      <p>Unggah foto permukaan jalan. Claude mengenali jenis kerusakan, lalu nilai Surface Distress Index (SDI) dihitung otomatis. Semua angka bisa dikoreksi surveyor.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: input + findings -->
+    <section class="panel" aria-labelledby="h-foto">
+      <div class="panel-head"><h2 id="h-foto">Foto & identitas segmen</h2><span class="eyebrow" id="srcLabel">Contoh</span></div>
+      <div class="fields">
+        <label class="f">Nama ruas<input type="text" id="ruas" value="Jl. Contoh Raya"></label>
+        <label class="f">STA (km+m)<input type="text" id="sta" value="2+100" class="mono"></label>
+        <label class="f">Panjang terwakili (m)<input type="number" id="panjang" value="20" min="1" step="1"></label>
+        <label class="f">Lintang (lat)<input type="text" id="lat" value="-6.915110" class="mono" inputmode="decimal" placeholder="-6.91511"></label>
+        <label class="f">Bujur (lon)<input type="text" id="lon" value="107.610640" class="mono" inputmode="decimal" placeholder="107.61064"></label>
+      </div>
+      <div class="gps" id="gpsInfo" role="status"></div>
+      <div class="drop has" id="drop" tabindex="0" role="button" aria-label="Pilih atau jatuhkan foto jalan">
+        <div class="stage" id="stage"></div>
+        <div class="hint" id="hint" hidden><strong>Jatuhkan foto jalan di sini</strong><span>atau klik untuk memilih · JPG, PNG, WebP · bisa juga tempel (Ctrl+V)</span></div>
+        <span class="sample-tag" id="sampleTag">Ilustrasi contoh</span>
+      </div>
+      <input type="file" id="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+      <div class="actions">
+        <button id="pick" type="button">Pilih foto</button>
+        <button id="analyze" type="button" class="primary">Analisis dengan AI</button>
+        <button id="stop" type="button" hidden>Hentikan</button>
+      </div>
+      <div class="status" id="status" role="status">Menampilkan hasil contoh. Pilih foto jalan Anda untuk memulai.</div>
+
+      <div class="panel-head"><h3>Kerusakan terdeteksi</h3><span class="muted" style="font-size:.8rem" id="pave"></span></div>
+      <p class="desc" id="desc"></p>
+      <ul class="findings" id="findings"></ul>
+      <div class="conf" id="conf"></div>
+    </section>
+
+    <!-- RIGHT: SDI sheet -->
+    <section class="panel" aria-labelledby="h-sdi">
+      <div class="panel-head"><h2 id="h-sdi">Lembar hitung SDI</h2><span class="eyebrow">dapat dikoreksi</span></div>
+      <div class="verdict" id="verdict"><div class="num mono" id="sdiNum">–</div><div class="cls" id="sdiCls">–</div><div class="act" id="sdiAct">–</div></div>
+      <div class="scale" id="scale"></div>
+      <table class="calc">
+        <tr><td>Luas retak <span class="muted">(% permukaan)</span></td><td class="in"><input type="number" id="vRetak" min="0" max="100" step="1" class="mono"></td><td id="s1"></td></tr>
+        <tr><td>Lebar retak rata-rata</td><td class="in"><select id="vLebar"><option>tidak ada</option><option>&lt;1 mm</option><option>1-3 mm</option><option>&gt;3 mm</option></select></td><td id="s2"></td></tr>
+        <tr><td>Jumlah lubang <span class="muted">(di foto)</span></td><td class="in"><input type="number" id="vLubang" min="0" step="1" class="mono"></td><td id="s3"></td></tr>
+        <tr><td>Kedalaman alur roda</td><td class="in"><select id="vAlur"><option>tidak ada</option><option>&lt;1 cm</option><option>1-3 cm</option><option>&gt;3 cm</option></select></td><td id="s4"></td></tr>
+        <tr class="total"><td colspan="2">SDI</td><td id="sTot"></td></tr>
+      </table>
+      <p class="note" id="lubangNote"></p>
+      <div>
+        <div class="eyebrow" style="margin-bottom:6px">Rekomendasi penanganan</div>
+        <p class="desc" id="rekom"></p>
+      </div>
+      <div class="actions"><button id="save" type="button" class="primary">Simpan ke daftar segmen</button></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="h-log">
+    <div class="panel-head"><h2 id="h-log">Daftar segmen</h2>
+      <div class="actions"><button id="copyCsv" type="button">Salin CSV</button><button id="copyGeo" type="button">Salin GeoJSON</button><button id="clearLog" type="button" class="link">Kosongkan</button></div></div>
+    <div class="tally" id="tally"></div>
+    <div>
+      <div class="panel-head" style="margin-bottom:8px"><h3>Peta sebaran segmen</h3><div class="legend" id="legend"></div></div>
+      <div class="mapwrap" id="map"></div>
+      <p class="note" style="margin-top:6px">Peta skematik dari koordinat GPS (utara di atas). Klik titik untuk membukanya di Google Maps.</p>
+    </div>
+    <div class="tablewrap"><table class="log"><thead><tr><th>Ruas</th><th>STA</th><th>Panjang</th><th>Retak %</th><th>Lubang/100 m</th><th>SDI</th><th>Kondisi</th><th>Lokasi</th><th>Tanggal</th><th></th></tr></thead><tbody id="logBody"></tbody></table></div>
+    <p class="note">Daftar ini tersimpan hanya di peramban Anda. “Salin CSV” untuk spreadsheet; “Salin GeoJSON” untuk QGIS atau geojson.io (tempel sebagai berkas .geojson).</p>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const CLASSES = [
+  { max: 50,  key: "baik",   label: "Baik",         c: "--ok",   bg: "--ok-bg",   act: "Pemeliharaan rutin" },
+  { max: 100, key: "sedang", label: "Sedang",       c: "--mid",  bg: "--mid-bg",  act: "Pemeliharaan rutin, pantau perkembangan" },
+  { max: 150, key: "rr",     label: "Rusak ringan", c: "--warn", bg: "--warn-bg", act: "Pemeliharaan berkala (pelapisan ulang / overlay tipis)" },
+  { max: Infinity, key: "rb", label: "Rusak berat", c: "--bad",  bg: "--bad-bg",  act: "Rehabilitasi atau rekonstruksi" },
+];
+const TYPE_COLORS = { "lubang": "#d23a2a", "retak buaya": "#e07a10", "retak memanjang": "#d9a400", "retak melintang": "#d9a400",
+  "retak blok": "#e07a10", "alur roda": "#7b4fd1", "amblas": "#7b4fd1", "pelepasan butir": "#2d8bb8", "tambalan": "#3f9a5a",
+  "keriting": "#2d8bb8", "kegemukan aspal": "#555f63", "lainnya": "#555f63" };
+const colorFor = t => TYPE_COLORS[(t || "").toLowerCase()] || TYPE_COLORS.lainnya;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+/* ---------- SDI (Bina Marga, Panduan Survai Kondisi Jalan SMD-03/RCS) ---------- */
+function computeSDI({ retak, lebar, lubang, alur, panjang }) {
+  const a = Math.max(0, Number(retak) || 0);
+  const sdi1 = a === 0 ? 0 : a < 10 ? 5 : a <= 30 ? 20 : 40;
+  const sdi2 = lebar === ">3 mm" ? sdi1 * 2 : sdi1;
+  const per100 = (Math.max(0, Number(lubang) || 0)) * 100 / Math.max(1, Number(panjang) || 100);
+  const addL = per100 === 0 ? 0 : per100 < 10 ? 15 : per100 <= 50 ? 75 : 225;
+  const sdi3 = sdi2 + addL;
+  const X = { "tidak ada": 0, "<1 cm": 0.5, "1-3 cm": 2, ">3 cm": 4 }[alur] ?? 0;
+  const addA = 5 * X;
+  const sdi = sdi3 + addA;
+  return { sdi1, sdi2, addL, sdi3, addA, sdi, per100, cls: CLASSES.find(c => sdi < c.max) || CLASSES[3] };
+}
+
+/* ---------- Sample (illustration, clearly marked) ---------- */
+const SAMPLE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 500'>
+<rect width='800' height='500' fill='#a9b7a0'/><rect width='800' height='170' fill='#c9d8e4'/>
+<path d='M330 170 L470 170 L800 500 L0 500 Z' fill='#4b4f52'/>
+<path d='M396 175 L404 175 L412 230 L388 230 Z M380 270 L420 270 L432 350 L368 350 Z M355 400 L445 400 L462 500 L338 500 Z' fill='#e9e3c8' opacity='.85'/>
+<ellipse cx='560' cy='405' rx='70' ry='26' fill='#25282a'/><ellipse cx='560' cy='400' rx='58' ry='18' fill='#33383b'/>
+<ellipse cx='250' cy='300' rx='30' ry='10' fill='#26292b'/>
+<g stroke='#2a2d2f' stroke-width='3' fill='none'><path d='M180 430 l30 -12 l18 14 l26 -10 l20 16 l-22 12 l-30 -6 l-24 14 Z M210 418 l6 26 M236 422 l-4 22'/>
+<path d='M150 470 l40 -20 l30 10 l35 -15 l20 25'/><path d='M500 230 q10 30 -4 60 q-8 30 6 60'/></g>
+<rect x='610' y='250' width='70' height='40' fill='#3c4043' stroke='#55595c' stroke-width='2'/></svg>`;
+const SAMPLE_URL = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SAMPLE_SVG);
+const SAMPLE_RESULT = {
+  jalan_terlihat: true, jenis_perkerasan: "aspal",
+  deskripsi: "Contoh: jalan aspal dua lajur dengan satu lubang besar di lajur kanan, lubang kecil di lajur kiri, dan retak buaya di tepi kiri.",
+  kerusakan: [
+    { jenis: "lubang", tingkat: "berat", kotak: [0.6, 0.76, 0.18, 0.12], catatan: "Diameter ±1 m, tepi pecah" },
+    { jenis: "lubang", tingkat: "sedang", kotak: [0.27, 0.57, 0.09, 0.07], catatan: "Lubang dangkal" },
+    { jenis: "retak buaya", tingkat: "sedang", kotak: [0.18, 0.8, 0.17, 0.17], catatan: "Pola kotak-kotak di jejak roda" },
+    { jenis: "retak memanjang", tingkat: "ringan", kotak: [0.6, 0.44, 0.04, 0.27], catatan: "Sejajar sumbu jalan" },
+    { jenis: "tambalan", tingkat: "ringan", kotak: [0.755, 0.49, 0.1, 0.1], catatan: "Tambalan lama, kondisi baik" },
+  ],
+  luas_retak_persen: 12, lebar_retak: "1-3 mm", jumlah_lubang: 2, kedalaman_alur: "tidak ada", keyakinan: 0.8,
+  rekomendasi: "Tambal lubang segera (patching) dan isi retak (crack sealing) sebelum musim hujan. Evaluasi ulang setelah perbaikan.",
+};
+
+/* ---------- State ---------- */
+let state = { imgUrl: SAMPLE_URL, file: null, result: SAMPLE_RESULT, isSample: true };
+let sample = null, ctl = null;
+
+function renderImage() {
+  const st = $("stage");
+  if (!state.imgUrl) { st.innerHTML = ""; $("drop").classList.remove("has"); $("hint").hidden = false; $("sampleTag").hidden = true; return; }
+  $("drop").classList.add("has"); $("hint").hidden = true; $("sampleTag").hidden = !state.isSample;
+  const boxes = (state.result?.kerusakan || []).filter(k => Array.isArray(k.kotak) && k.kotak.length === 4).map(k => {
+    const [x, y, w, h] = k.kotak.map(v => Math.min(1, Math.max(0, Number(v) || 0)) * 100);
+    return `<div class="box" style="--c:${colorFor(k.jenis)};left:${x}%;top:${y}%;width:${Math.min(w, 100 - x)}%;height:${Math.min(h, 100 - y)}%"><span>${esc(k.jenis)}</span></div>`;
+  }).join("");
+  st.innerHTML = `<img src="${state.imgUrl}" alt="Foto permukaan jalan">${boxes}`;
+}
+
+function renderFindings() {
+  const r = state.result;
+  $("srcLabel").textContent = state.isSample ? "Contoh" : r ? "Hasil analisis" : "Belum dianalisis";
+  if (!r) { $("desc").textContent = "Tekan “Analisis dengan AI” untuk mendeteksi kerusakan pada foto ini."; $("findings").innerHTML = ""; $("conf").innerHTML = ""; $("pave").textContent = ""; return; }
+  $("desc").textContent = r.deskripsi || "";
+  $("pave").textContent = r.jenis_perkerasan ? "Perkerasan: " + r.jenis_perkerasan : "";
+  const ks = r.kerusakan || [];
+  $("findings").innerHTML = ks.length ? ks.map(k => `<li><span class="dot" style="--c:${colorFor(k.jenis)}"></span>
+    <div><strong>${esc(k.jenis)}</strong>${k.catatan ? `<div class="muted" style="font-size:.85rem">${esc(k.catatan)}</div>` : ""}</div>
+    <span class="sev ${esc((k.tingkat || "").toLowerCase())}">${esc(k.tingkat || "–")}</span></li>`).join("")
+    : `<li><span></span><div class="muted">Tidak ada kerusakan yang terlihat.</div><span></span></li>`;
+  const c = Math.round((Number(r.keyakinan) || 0) * 100);
+  $("conf").innerHTML = `<span>Keyakinan AI</span><span class="bar"><i style="width:${c}%"></i></span><span class="mono">${c}%</span>`;
+}
+
+function fillInputs() {
+  const r = state.result || {};
+  $("vRetak").value = Math.round(Number(r.luas_retak_persen) || 0);
+  $("vLebar").value = ["tidak ada", "<1 mm", "1-3 mm", ">3 mm"].includes(r.lebar_retak) ? r.lebar_retak : "tidak ada";
+  $("vLubang").value = Math.round(Number(r.jumlah_lubang) || 0);
+  $("vAlur").value = ["tidak ada", "<1 cm", "1-3 cm", ">3 cm"].includes(r.kedalaman_alur) ? r.kedalaman_alur : "tidak ada";
+}
+
+function currentInputs() {
+  return { retak: $("vRetak").value, lebar: $("vLebar").value, lubang: $("vLubang").value, alur: $("vAlur").value, panjang: $("panjang").value };
+}
+
+function renderSDI() {
+  const s = computeSDI(currentInputs());
+  const v = $("verdict");
+  v.style.setProperty("--vbg", `var(${s.cls.bg})`); v.style.setProperty("--vfg", `var(${s.cls.c})`);
+  $("sdiNum").textContent = Number.isInteger(s.sdi) ? s.sdi : s.sdi.toFixed(1);
+  $("sdiCls").textContent = s.cls.label; $("sdiAct").textContent = s.cls.act;
+  $("scale").innerHTML = CLASSES.map((c, i) => `<div class="${c === s.cls ? "on" : ""}" style="--c:var(${c.c})">${c.label}<br>${["< 50", "50–100", "100–150", "≥ 150"][i]}</div>`).join("");
+  $("s1").textContent = "SDI₁ " + s.sdi1;
+  $("s2").textContent = "SDI₂ " + s.sdi2;
+  $("s3").textContent = "+" + s.addL;
+  $("s4").textContent = "+" + s.addA;
+  $("sTot").textContent = Number.isInteger(s.sdi) ? s.sdi : s.sdi.toFixed(1);
+  $("lubangNote").textContent = `Lubang dihitung per 100 m: ${$("vLubang").value || 0} lubang di ${$("panjang").value || 0} m ≈ ${s.per100.toFixed(1)} per 100 m. Ubah “Panjang terwakili” sesuai jarak jalan yang tampak di foto.`;
+  const r = state.result;
+  const pavedNote = r && r.jenis_perkerasan && !/aspal/i.test(r.jenis_perkerasan) ? " Catatan: SDI dirancang untuk perkerasan aspal; untuk perkerasan " + r.jenis_perkerasan + " gunakan hasil ini sebagai indikasi saja." : "";
+  $("rekom").textContent = (r?.rekomendasi ? r.rekomendasi + " " : "") + "Kategori SDI: " + s.cls.act.toLowerCase() + "." + pavedNote;
+  return s;
+}
+
+function renderAll() { renderImage(); renderFindings(); renderSDI(); }
+
+/* ---------- EXIF GPS (JPEG) ---------- */
+async function readExif(file) {
+  const v = new DataView(await file.slice(0, 256 * 1024).arrayBuffer());
+  if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return { format: "bukan-jpeg" };
+  let off = 2;
+  while (off + 10 < v.byteLength) {
+    const marker = v.getUint16(off);
+    if ((marker & 0xFF00) !== 0xFF00 || marker === 0xFFDA) break;
+    const len = v.getUint16(off + 2);
+    if (marker === 0xFFE1 && v.getUint32(off + 4) === 0x45786966) return parseTiff(v, off + 10);
+    off += 2 + len;
+  }
+  return { format: "jpeg" };
+}
+function parseTiff(v, t) {
+  const le = v.getUint16(t) === 0x4949;
+  const u16 = o => v.getUint16(o, le), u32 = o => v.getUint32(o, le);
+  const ifd = o => { const m = {}; const n = u16(o); for (let i = 0; i < n; i++) { const e = o + 2 + i * 12; m[u16(e)] = { type: u16(e + 2), count: u32(e + 4), e }; } return m; };
+  const ptr = en => t + u32(en.e + 8);
+  const ascii = en => { const at = en.count <= 4 ? en.e + 8 : ptr(en); let s = ""; for (let i = 0; i < en.count - 1; i++) s += String.fromCharCode(v.getUint8(at + i)); return s.trim(); };
+  const rats = en => { const at = ptr(en), out = []; for (let i = 0; i < en.count; i++) { const d = u32(at + i * 8 + 4); out.push(d ? u32(at + i * 8) / d : 0); } return out; };
+  const out = { format: "jpeg" };
+  try {
+    const ifd0 = ifd(t + u32(t + 4));
+    if (ifd0[0x8769]) { const ex = ifd(ptr(ifd0[0x8769])); if (ex[0x9003]) out.waktu = ascii(ex[0x9003]); }
+    if (ifd0[0x8825]) {
+      const g = ifd(ptr(ifd0[0x8825]));
+      if (g[2] && g[4]) {
+        const dms = a => a[0] + a[1] / 60 + a[2] / 3600;
+        let lat = dms(rats(g[2])), lon = dms(rats(g[4]));
+        if (g[1] && ascii(g[1]) === "S") lat = -lat;
+        if (g[3] && ascii(g[3]) === "W") lon = -lon;
+        if (isFinite(lat) && isFinite(lon) && !(lat === 0 && lon === 0)) { out.lat = lat; out.lon = lon; }
+      }
+      if (g[0x11]) out.arah = rats(g[0x11])[0];
+    }
+  } catch { /* corrupt EXIF: return what we have */ }
+  return out;
+}
+const fmtCoord = n => Number(n).toFixed(6);
+const mapsLink = (lat, lon) => `https://www.google.com/maps?q=${fmtCoord(lat)},${fmtCoord(lon)}`;
+function readCoords() {
+  const lat = parseFloat(String($("lat").value).replace(",", ".")), lon = parseFloat(String($("lon").value).replace(",", "."));
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && isFinite(lat) && isFinite(lon) ? { lat, lon } : null;
+}
+function showGps(kind, html) { const g = $("gpsInfo"); g.className = "gps " + kind; g.innerHTML = html; }
+function renderGpsManual() {
+  const c = readCoords();
+  if (c) showGps("ok", `Lokasi: <strong>${fmtCoord(c.lat)}, ${fmtCoord(c.lon)}</strong> <a href="${mapsLink(c.lat, c.lon)}" target="_blank" rel="noopener">lihat di peta ↗</a>`);
+  else showGps("none", "Belum ada koordinat. Isi lintang/bujur secara manual (format desimal, mis. -6.91511) atau unggah foto ber-GPS.");
+}
+async function readGps(f) {
+  showGps("", "Membaca data lokasi dari foto…");
+  let ex = null;
+  try { ex = await readExif(f); } catch { ex = null; }
+  if (state.file !== f) return;
+  if (ex && ex.lat != null) {
+    $("lat").value = fmtCoord(ex.lat); $("lon").value = fmtCoord(ex.lon);
+    state.waktu = ex.waktu || "";
+    showGps("ok", `GPS dari foto: <strong>${fmtCoord(ex.lat)}, ${fmtCoord(ex.lon)}</strong>${ex.waktu ? ` · diambil ${esc(ex.waktu)}` : ""}${ex.arah != null ? ` · arah ${Math.round(ex.arah)}°` : ""} <a href="${mapsLink(ex.lat, ex.lon)}" target="_blank" rel="noopener">lihat di peta ↗</a>`);
+  } else {
+    $("lat").value = ""; $("lon").value = "";
+    state.waktu = ex?.waktu || "";
+    const why = !ex || ex.format === "bukan-jpeg"
+      ? "Lokasi hanya bisa dibaca dari foto JPEG."
+      : "Foto ini tidak menyimpan lokasi. Penyebab umum: tag lokasi kamera mati, foto dikirim lewat WhatsApp/Telegram/media sosial, atau peramban HP menghapusnya saat unggah. Unggah berkas asli dari laptop, atau isi koordinat manual.";
+    showGps("none", "Tidak ada GPS. " + why);
+  }
+}
+
+/* ---------- Image input ---------- */
+function setFile(f) {
+  if (!f || !/^image\//.test(f.type)) { setStatus("Berkas itu bukan gambar. Pilih foto JPG, PNG atau WebP.", true); return; }
+  if (state.imgUrl && state.imgUrl.startsWith("blob:")) URL.revokeObjectURL(state.imgUrl);
+  state = { imgUrl: URL.createObjectURL(f), file: f, result: null, isSample: false };
+  ["vRetak", "vLubang"].forEach(id => $(id).value = 0); $("vLebar").value = "tidak ada"; $("vAlur").value = "tidak ada";
+  renderAll(); readGps(f);
+  setStatus(sample ?"Foto siap. Tekan “Analisis dengan AI”." : "Foto dimuat. Analisis AI tidak tersedia di tampilan ini; isi lembar hitung secara manual.");
+}
+$("pick").onclick = () => $("file").click();
+$("drop").onclick = () => { if (!$("drop").classList.contains("has") || state.isSample) $("file").click(); };
+$("drop").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } };
+$("file").onchange = e => { if (e.target.files[0]) setFile(e.target.files[0]); e.target.value = ""; };
+["dragenter", "dragover"].forEach(t => $("drop").addEventListener(t, e => { e.preventDefault(); $("drop").classList.add("over"); }));
+["dragleave", "drop"].forEach(t => $("drop").addEventListener(t, e => { e.preventDefault(); $("drop").classList.remove("over"); }));
+$("drop").addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) setFile(f); });
+document.addEventListener("paste", e => { const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/")); if (it) setFile(it.getAsFile()); });
+
+function setStatus(msg, err) { $("status").textContent = msg; $("status").classList.toggle("err", !!err); }
+
+/* ---------- AI analysis ---------- */
+const PROMPT = `Anda adalah inspektur kondisi jalan yang berpengalaman dengan metode survei SDI (Surface Distress Index) Bina Marga.
+Foto terlampir adalah permukaan jalan. Identifikasi kerusakan perkerasan yang terlihat.
+
+Balas HANYA dengan satu objek JSON berbentuk:
+{
+ "jalan_terlihat": boolean,
+ "jenis_perkerasan": "aspal" | "beton" | "paving" | "kerikil/tanah" | "lainnya",
+ "deskripsi": string (1-2 kalimat bahasa Indonesia tentang kondisi umum),
+ "kerusakan": [ { "jenis": salah satu dari "lubang","retak buaya","retak memanjang","retak melintang","retak blok","alur roda","amblas","pelepasan butir","tambalan","keriting","kegemukan aspal","lainnya",
+                 "tingkat": "ringan" | "sedang" | "berat",
+                 "kotak": [x, y, lebar, tinggi] dalam koordinat ternormalisasi 0-1 dari kiri-atas foto,
+                 "catatan": string singkat } ],
+ "luas_retak_persen": number 0-100 (perkiraan persentase luas permukaan jalan yang tampak yang mengalami retak),
+ "lebar_retak": "tidak ada" | "<1 mm" | "1-3 mm" | ">3 mm",
+ "jumlah_lubang": integer (lubang yang tampak di foto),
+ "kedalaman_alur": "tidak ada" | "<1 cm" | "1-3 cm" | ">3 cm",
+ "keyakinan": number 0-1 (seberapa yakin penilaian Anda dari foto ini),
+ "rekomendasi": string (1-2 kalimat penanganan teknis, bahasa Indonesia)
+}
+Jika foto bukan jalan, isi "jalan_terlihat": false dan biarkan "kerusakan" kosong. Maksimal 12 item kerusakan. Jangan mengarang kerusakan yang tidak terlihat.`;
+
+$("analyze").onclick = async () => {
+  if (!sample) { setStatus("Analisis AI tidak tersedia di tampilan ini. Isi lembar hitung secara manual.", true); return; }
+  if (state.isSample || !state.file) { $("file").click(); return; }
+  ctl = new AbortController();
+  $("analyze").disabled = true; $("stop").hidden = false;
+  setStatus("Claude sedang memeriksa foto… biasanya 10–60 detik.");
+  try {
+    const r = await sample.json(PROMPT + `\n\nKonteks: ruas "${$("ruas").value}", STA ${$("sta").value}, foto mewakili ±${$("panjang").value} m jalan.`,
+      { images: [state.file], signal: ctl.signal, modelTier: "default" });
+    if (!r || typeof r !== "object") throw { code: "invalid_json" };
+    state.result = r;
+    if (r.jalan_terlihat === false) { setStatus("Foto ini tampaknya bukan permukaan jalan. Coba foto lain yang memperlihatkan perkerasan.", true); }
+    else setStatus("Analisis selesai. Periksa angka di lembar hitung dan koreksi bila perlu.");
+    fillInputs(); renderAll();
+  } catch (e) {
+    const msg = {
+      cancelled: "Analisis dihentikan.",
+      not_granted: "Akses ke Claude tidak diizinkan. Lembar hitung tetap bisa diisi manual.",
+      sampling_disabled: "Claude tidak tersedia untuk akun ini. Isi lembar hitung secara manual.",
+      images_unavailable: "Tampilan ini tidak bisa mengirim gambar ke Claude. Isi lembar hitung secara manual.",
+      image_rejected: "Foto ditolak (terlalu besar atau format tidak didukung). Coba JPG atau PNG yang lebih kecil.",
+      rate_limited: "Terlalu banyak permintaan. Tunggu sebentar, lalu coba lagi.",
+      invalid_json: "Jawaban AI tidak terbaca. Tekan “Analisis dengan AI” sekali lagi.",
+      refused: "Claude tidak dapat menganalisis foto ini. Coba foto lain.",
+      session_expired: "Sesi Anda berakhir. Masuk kembali, lalu coba lagi.",
+    }[e?.code] || "Analisis gagal karena gangguan koneksi. Coba lagi.";
+    setStatus(msg, e?.code !== "cancelled");
+  } finally { $("analyze").disabled = false; $("stop").hidden = true; ctl = null; }
+};
+$("stop").onclick = () => ctl?.abort();
+
+["vRetak", "vLebar", "vLubang", "vAlur", "panjang"].forEach(id => $(id).addEventListener("input", renderSDI));
+["lat", "lon"].forEach(id => $(id).addEventListener("input", renderGpsManual));
+
+/* ---------- Segment log (per-viewer, localStorage) ---------- */
+const LS = "pkj-segmen-v1";
+const EXAMPLE_LOG = [
+  { ruas: "Jl. Contoh Raya", sta: "1+900", panjang: 100, retak: 0, per100: 0, sdi: 0, cls: "Baik", lat: -6.91432, lon: 107.60895, tgl: "2026-10-10", ex: true },
+  { ruas: "Jl. Contoh Raya", sta: "2+000", panjang: 50, retak: 4, per100: 0, sdi: 5, cls: "Baik", lat: -6.91470, lon: 107.60980, tgl: "2026-10-10", ex: true },
+  { ruas: "Jl. Contoh Raya", sta: "2+050", panjang: 25, retak: 22, per100: 4, sdi: 35, cls: "Baik", lat: -6.91490, lon: 107.61022, tgl: "2026-10-10", ex: true },
+  { ruas: "Jl. Contoh Raya", sta: "2+075", panjang: 25, retak: 35, per100: 12, sdi: 115, cls: "Rusak ringan", lat: -6.91500, lon: 107.61043, tgl: "2026-10-10", ex: true },
+  { ruas: "Jl. Contoh Raya", sta: "2+100", panjang: 20, retak: 12, per100: 10, sdi: 95, cls: "Sedang", lat: -6.91511, lon: 107.61064, tgl: "2026-10-10", ex: true },
+  { ruas: "Jl. Contoh Raya", sta: "2+120", panjang: 30, retak: 45, per100: 60, sdi: 265, cls: "Rusak berat", lat: -6.91528, lon: 107.61093, tgl: "2026-10-10", ex: true },
+];
+function loadLog() { try { const v = JSON.parse(localStorage.getItem(LS)); return Array.isArray(v) ? v : null; } catch { return null; } }
+function saveLog(l) { try { localStorage.setItem(LS, JSON.stringify(l)); } catch {} }
+let log = loadLog();
+const rows = () => log && log.length ? log : EXAMPLE_LOG;
+
+function renderLog() {
+  const list = rows(), isEx = !(log && log.length);
+  $("logBody").innerHTML = list.map((r, i) => {
+    const c = CLASSES.find(k => k.label === r.cls) || CLASSES[0];
+    return `<tr class="${isEx ? "ex" : ""}"><td>${esc(r.ruas)}${isEx ? " (contoh)" : ""}</td><td class="mono">${esc(r.sta)}</td><td class="n">${r.panjang} m</td><td class="n">${r.retak}</td><td class="n">${Number(r.per100).toFixed(1)}</td>
+      <td class="n"><strong>${r.sdi}</strong></td><td><span class="chip" style="--c:var(${c.c});--cbg:var(${c.bg})">${esc(r.cls)}</span></td>
+      <td class="mono">${r.lat != null ? `<a href="${mapsLink(r.lat, r.lon)}" target="_blank" rel="noopener" style="color:inherit">${Number(r.lat).toFixed(5)}, ${Number(r.lon).toFixed(5)}</a>` : `<span class="muted">–</span>`}</td><td class="mono">${esc(r.tgl)}</td>
+      <td>${isEx ? "" : `<button class="link" data-del="${i}" aria-label="Hapus baris">Hapus</button>`}</td></tr>`;
+  }).join("");
+  const tot = {}; let len = 0;
+  list.forEach(r => { tot[r.cls] = (tot[r.cls] || 0) + Number(r.panjang); len += Number(r.panjang); });
+  $("tally").innerHTML = CLASSES.map(c => { const m = tot[c.label] || 0;
+    return `<span class="chip" style="--c:var(${c.c});--cbg:var(${c.bg})">${c.label} · ${m} m · ${len ? Math.round(m * 100 / len) : 0}%</span>`; }).join("")
+    + `<span class="muted mono" style="font-size:.8rem;align-self:center">Total ${len} m${isEx ? " · data contoh" : ""}</span>`;
+  $("clearLog").hidden = isEx;
+  renderMap(list, isEx);
+}
+
+function niceStep(m) { const p = Math.pow(10, Math.floor(Math.log10(m))); for (const k of [1, 2, 5, 10]) if (k * p >= m) return k * p; return 10 * p; }
+function renderMap(list, isEx) {
+  $("legend").innerHTML = CLASSES.map(c => `<span><i style="--c:var(${c.c})"></i>${c.label}</span>`).join("");
+  const pts = list.map((r, i) => ({ ...r, i })).filter(r => r.lat != null && r.lon != null && isFinite(r.lat) && isFinite(r.lon));
+  if (!pts.length) { $("map").innerHTML = `<div class="empty" style="padding:24px 16px">Belum ada segmen berkoordinat. Simpan segmen dari foto ber-GPS atau isi lintang/bujur, dan titiknya akan muncul di sini.</div>`; return; }
+  const W = 800, H = 340, pad = 44;
+  const lat0 = pts.reduce((s, p) => s + p.lat, 0) / pts.length, lon0 = pts.reduce((s, p) => s + p.lon, 0) / pts.length;
+  const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110574;
+  const xy = pts.map(p => ({ x: (p.lon - lon0) * kx, y: (p.lat - lat0) * ky }));
+  let minX = Math.min(...xy.map(p => p.x)), maxX = Math.max(...xy.map(p => p.x)), minY = Math.min(...xy.map(p => p.y)), maxY = Math.max(...xy.map(p => p.y));
+  const span = Math.max(maxX - minX, (maxY - minY) * (W - 2 * pad) / (H - 2 * pad), 100);
+  const scale = (W - 2 * pad) / span;
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const px = p => ({ X: W / 2 + (p.x - cx) * scale, Y: H / 2 - (p.y - cy) * scale });
+  const bar = niceStep(span / 5), barPx = bar * scale;
+  const grid = Array.from({ length: 9 }, (_, i) => `<line x1="${i * 100}" y1="0" x2="${i * 100}" y2="${H}" style="stroke:var(--line)" stroke-width="1"/>`).join("")
+    + Array.from({ length: 4 }, (_, i) => `<line x1="0" y1="${i * 100 + 20}" x2="${W}" y2="${i * 100 + 20}" style="stroke:var(--line)" stroke-width="1"/>`).join("");
+  const sorted = pts.map((p, k) => ({ p, P: px(xy[k]) }));
+  const line = sorted.length > 1 && pts.every(p => p.ruas === pts[0].ruas)
+    ? `<polyline points="${sorted.map(s => s.P.X.toFixed(1) + "," + s.P.Y.toFixed(1)).join(" ")}" fill="none" style="stroke:var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>` : "";
+  const dots = sorted.map(({ p, P }) => { const c = CLASSES.find(k => k.label === p.cls) || CLASSES[0];
+    return `<a class="pt" href="${mapsLink(p.lat, p.lon)}" target="_blank" rel="noopener"><title>${esc(p.ruas)} STA ${esc(p.sta)} · SDI ${p.sdi} · ${esc(p.cls)}</title>
+      <circle cx="${P.X.toFixed(1)}" cy="${P.Y.toFixed(1)}" r="8" style="fill:var(${c.c})"/><text x="${(P.X + 11).toFixed(1)}" y="${(P.Y - 9).toFixed(1)}">${esc(p.sta)}</text></a>`; }).join("");
+  $("map").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Peta sebaran ${pts.length} segmen">
+    ${grid}${line}${dots}
+    <g transform="translate(${W - 34},34)"><path d="M0 -16 L7 6 L0 1 L-7 6 Z" style="fill:var(--fg)"/><text x="0" y="20" text-anchor="middle">U</text></g>
+    <g transform="translate(20,${H - 18})"><rect width="${barPx.toFixed(1)}" height="5" style="fill:var(--fg)"/><text x="0" y="-6">0</text><text x="${barPx.toFixed(1)}" y="-6" text-anchor="middle">${bar >= 1000 ? bar / 1000 + " km" : bar + " m"}</text></g>
+    ${isEx ? `<text x="${W - 14}" y="${H - 12}" text-anchor="end">data contoh</text>` : ""}
+  </svg>`;
+}
+$("logBody").onclick = e => { const i = e.target.dataset?.del; if (i != null) { log.splice(+i, 1); saveLog(log); renderLog(); } };
+$("save").onclick = () => {
+  const s = renderSDI(), inp = currentInputs();
+  log = log || [];
+  log.push({ ruas: $("ruas").value || "–", sta: $("sta").value || "–", panjang: Number(inp.panjang) || 0, retak: Number(inp.retak) || 0,
+    per100: Math.round(s.per100 * 10) / 10, sdi: s.sdi, cls: s.cls.label, tgl: new Date().toISOString().slice(0, 10),
+    lat: readCoords()?.lat ?? null, lon: readCoords()?.lon ?? null, waktu_foto: state.waktu || "" });
+  saveLog(log); renderLog();
+  setStatus(`Segmen STA ${$("sta").value} disimpan sebagai “${s.cls.label}”${readCoords() ? "" : " (tanpa koordinat, tidak tampil di peta)"}.`);
+};
+$("clearLog").onclick = () => { log = []; saveLog(log); renderLog(); };
+$("copyCsv").onclick = async () => {
+  const head = "ruas,sta,panjang_m,retak_persen,lubang_per_100m,sdi,kondisi,lat,lon,waktu_foto,tanggal";
+  const csv = [head, ...rows().map(r => [r.ruas, r.sta, r.panjang, r.retak, r.per100, r.sdi, r.cls, r.lat ?? "", r.lon ?? "", r.waktu_foto || "", r.tgl].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+  try { await navigator.clipboard.writeText(csv); $("copyCsv").textContent = "CSV tersalin"; setTimeout(() => $("copyCsv").textContent = "Salin CSV", 1800); }
+  catch { setStatus("Peramban menolak menyalin. Pilih teks tabel secara manual.", true); }
+};
+
+$("copyGeo").onclick = async () => {
+  const fc = { type: "FeatureCollection", features: rows().filter(r => r.lat != null && r.lon != null).map(r => ({
+    type: "Feature", geometry: { type: "Point", coordinates: [Number(r.lon), Number(r.lat)] },
+    properties: { ruas: r.ruas, sta: r.sta, panjang_m: r.panjang, retak_persen: r.retak, lubang_per_100m: r.per100, sdi: r.sdi, kondisi: r.cls, waktu_foto: r.waktu_foto || "", tanggal: r.tgl } })) };
+  if (!fc.features.length) { setStatus("Belum ada segmen berkoordinat untuk diekspor.", true); return; }
+  try { await navigator.clipboard.writeText(JSON.stringify(fc, null, 1)); $("copyGeo").textContent = "GeoJSON tersalin"; setTimeout(() => $("copyGeo").textContent = "Salin GeoJSON", 1800); }
+  catch { setStatus("Peramban menolak menyalin. Coba lagi dari peramban lain.", true); }
+};
+
+/* ---------- Boot ---------- */
+fillInputs(); renderAll(); renderLog();
+showGps("ok", `Contoh lokasi: <strong>-6.915110, 107.610640</strong> · unggah foto ber-GPS untuk mengisi otomatis`);
+(async () => {
+  try { sample = await window.claude?.use?.("sample"); } catch { sample = null; }
+  if (sample) {
+    const lim = await sample.limits().catch(() => null);
+    if (!lim?.images) sample = null;
+  }
+  if (!sample) { $("analyze").disabled = true; $("analyze").title = "Analisis AI tidak tersedia di tampilan ini"; }
+})();
+</script>

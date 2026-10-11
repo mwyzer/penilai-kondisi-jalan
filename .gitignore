@@ -1,0 +1,14 @@
+# Rahasia & data lokal
+.streamlit/secrets.toml
+.env
+data/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Editor / alat
+.claude/
