@@ -12,3 +12,6 @@ venv/
 
 # Editor / alat
 .claude/
+
+# Model hasil pelatihan (bisa besar)
+models/*.onnx

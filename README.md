@@ -51,6 +51,19 @@ DEEPSEEK_API_KEY = "isi-kunci-deepseek"
 
 Jalankan ulang `streamlit run app.py` setelah mengubah berkas ini. Setiap analisis memakai kredit API (biayanya kecil per foto). Lebar retak dan kedalaman alur hanyalah perkiraan visual dari foto.
 
+## Model deteksi offline (RF-DETR) — dalam persiapan
+
+Notebook [`notebooks/latih_rfdetr.ipynb`](notebooks/latih_rfdetr.ipynb) melatih **RF-DETR Nano** (Apache 2.0) untuk mendeteksi kerusakan jalan (dataset RDD dari Roboflow Universe: D00 retak memanjang, D10 retak melintang, D20 retak buaya, D40 lubang) dan mengekspornya ke ONNX.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/mwyzer/penilai-kondisi-jalan/blob/main/notebooks/latih_rfdetr.ipynb)
+
+1. Buka notebook di Google Colab dengan runtime **T4 GPU**.
+2. Simpan API key Roboflow di *Secrets* Colab sebagai `ROBOFLOW_API_KEY`.
+3. Jalankan semua sel. Hasilnya `rfdetr_jalan.onnx` dan `classes.json`.
+4. Letakkan kedua berkas di folder `models/` proyek ini. Berkas `.onnx` tidak ikut di-commit karena ukurannya besar.
+
+Integrasi model ini ke aplikasi sebagai penyedia offline akan ditambahkan setelah model selesai dilatih.
+
 ## Berkas
 
 - `app.py` — antarmuka Streamlit
