@@ -10,6 +10,7 @@ import streamlit as st
 
 from analisis import WARNA_JENIS, AnalisisGagal, analisis_claude, gambar_kotak, nilai_lembar
 from analisis_deepseek import analisis_deepseek
+from statistik import MIN_N_RUAS, pemulusan_gaussian, segmen_aneh, statistik_ruas
 from analisis import HasilAnalisis
 from exif_gps import baca_gps, maps_link
 from sdi import ALUR_OPSI, KELAS, LEBAR_OPSI, compute_sdi, fmt_sdi, kelas_dari_label
@@ -210,6 +211,19 @@ for col, c in zip(st.columns(len(KELAS)), KELAS):
     m = sum(float(r["panjang"]) for r in rows if r["cls"] == c.label)
     col.metric(c.label, f"{m:g} m", f"{round(m * 100 / total) if total else 0}% dari {total:g} m", delta_color="off")
 
+st.markdown("**Perbandingan antar-ruas**")
+stat_ruas = statistik_ruas(rows)
+st.dataframe(pd.DataFrame([{
+    "Ruas": s["ruas"], "Segmen": s["n"], "Rata-rata SDI": round(s["rata"], 1), "Simpangan baku": round(s["sb"], 1),
+    "Interval 95%": f"{s['ci_bawah']:.0f} – {s['ci_atas']:.0f}" if s["n"] > 1 else "–",
+    "Catatan": "" if s["n"] >= MIN_N_RUAS else f"Kurang dari {MIN_N_RUAS} segmen, belum bermakna",
+} for s in stat_ruas]), hide_index=True, use_container_width=True)
+st.caption("Interval 95% adalah perkiraan rentang rata-rata SDI ruas. Bila dua ruas intervalnya tidak saling tumpang tindih, "
+           "perbedaannya kemungkinan nyata. Hasilnya kasar bila jumlah segmen sedikit.")
+
+halus = pemulusan_gaussian(rows)
+aneh = segmen_aneh(rows)
+
 titik = [r for r in rows if r.get("lat") is not None and r.get("lon") is not None]
 if titik:
     df_map = pd.DataFrame([{**r, "warna": hex_rgb(kelas_dari_label(r["cls"]).warna)} for r in titik])
@@ -224,9 +238,10 @@ else:
 
 st.dataframe(pd.DataFrame([{
     "Ruas": r["ruas"], "STA": r["sta"], "Panjang (m)": r["panjang"], "Retak %": r["retak"],
-    "Lubang/100 m": r["per100"], "SDI": r["sdi"], "Kondisi": r["cls"],
+    "Lubang/100 m": r["per100"], "SDI": r["sdi"], "SDI halus": None if halus[i] is None else round(halus[i], 1),
+    "Aneh?": "ya" if aneh[i] else "", "Kondisi": r["cls"],
     "Lokasi": maps_link(r["lat"], r["lon"]) if r.get("lat") is not None else None, "Tanggal": r["tgl"],
-} for r in rows]), hide_index=True, use_container_width=True,
+} for i, r in enumerate(rows)]), hide_index=True, use_container_width=True,
     column_config={"Lokasi": st.column_config.LinkColumn("Lokasi", display_text="buka peta ↗")})
 
 d1, d2, d3, d4 = st.columns([1, 1, 2, 1])
