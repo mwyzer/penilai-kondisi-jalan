@@ -13,6 +13,22 @@ streamlit run app.py
 
 Buka http://localhost:8501.
 
+## Sumber data
+
+Pilih sumber data di bagian atas aplikasi:
+
+| Sumber | Input | Hasil |
+|---|---|---|
+| **Foto tunggal** | Satu foto per segmen (GPS dibaca dari EXIF JPEG) | Lembar hitung SDI, isi manual atau dengan AI |
+| **Video pendek** | Video MP4/MOV/AVI/WebM | Frame paling tajam diambil merata dari video, dianalisis AI, lalu digabung ke lembar hitung SDI: luas retak dirata-rata, lebar retak dan alur roda diambil median, lubang diambil jumlah terbanyak dalam satu frame |
+| **Beberapa foto** | Banyak foto sekaligus, satu foto per segmen | STA berurutan dari STA awal + jarak antar-foto; hasil bisa dikoreksi di tabel sebelum disimpan |
+| **Impor CSV/GeoJSON** | Berkas dengan format sama seperti hasil ekspor (kolom wajib: `ruas`, `sta`, `sdi`) | Segmen ditambahkan ke daftar; kondisi dihitung ulang dari SDI |
+| **Sensor getaran** | CSV akselerometer HP (misalnya phyphox atau Physics Toolbox) | RMS getaran vertikal per segmen, grafik, peta (bila ada GPS), dan unduhan CSV |
+
+RMS getaran adalah indikator kekasaran **relatif**, bukan nilai IRI resmi. Bandingkan hanya antar-rekaman dengan kendaraan, kecepatan, dan posisi HP yang sama.
+
+Daftar segmen menampilkan perbandingan antar-ruas (rata-rata, simpangan baku, interval 95%), SDI yang dihaluskan dengan kernel Gaussian sepanjang STA, dan penanda segmen yang nilainya menyimpang (|z| > 2).
+
 ## Analisis foto otomatis (opsional)
 
 Tombol **Analisis foto otomatis** mengirim foto ke model AI, lalu mengisi lembar hitung SDI dan menandai kerusakan di foto.
@@ -41,6 +57,12 @@ Jalankan ulang `streamlit run app.py` setelah mengubah berkas ini. Setiap analis
 - `sdi.py` — rumus SDI dan kelas kondisi
 - `analisis.py` — analisis foto dengan Claude (dan skema hasil AI bersama)
 - `analisis_deepseek.py` — analisis foto dengan DeepSeek
+- `ai.py` — memilih penyedia AI dari pengaturan
+- `ui_lain.py` — tampilan opsi beberapa foto, impor, dan sensor getaran
+- `video.py` — mengambil frame tajam dari video dan menggabungkan hasil analisis
+- `impor.py` — membaca CSV/GeoJSON segmen
+- `sensor.py` — menghitung kekasaran dari data akselerometer
+- `statistik.py` — statistik per ruas, pemulusan Gaussian, deteksi segmen menyimpang
 - `exif_gps.py` — membaca GPS/waktu dari foto
 - `storage.py` — daftar segmen (`data/segmen.json`), ekspor CSV & GeoJSON
 - `tests/` — `pytest`

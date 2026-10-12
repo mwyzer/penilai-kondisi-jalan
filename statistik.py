@@ -17,6 +17,12 @@ def sta_ke_meter(sta: str) -> Optional[float]:
         return None
 
 
+def meter_ke_sta(meter: float) -> str:
+    """2100 -> '2+100'."""
+    m = max(0, int(round(meter)))
+    return f"{m // 1000}+{m % 1000:03d}"
+
+
 def pemulusan_gaussian(rows: list[dict], sigma_m: float = SIGMA_M) -> list[Optional[float]]:
     """SDI yang dihaluskan dengan kernel Gaussian, hanya dari segmen dalam ruas yang sama.
 
