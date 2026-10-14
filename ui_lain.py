@@ -43,6 +43,27 @@ def tampil_banyak_foto() -> None:
 
     if berkas:
         berkas = sorted(berkas, key=lambda f: f.name)
+        st.markdown("**Preview foto**")
+        idx_key = "b_foto_idx"
+        st.session_state.setdefault(idx_key, 0)
+        idx = st.session_state[idx_key]
+        idx = max(0, min(idx, len(berkas) - 1))
+        st.session_state[idx_key] = idx
+
+        col_prev, col_img, col_next = st.columns([1, 3, 1])
+        with col_prev:
+            if st.button("◀ Sebelumnya", key="b_prev", use_container_width=True):
+                st.session_state[idx_key] = max(0, idx - 1)
+                st.rerun()
+        with col_img:
+            st.image(berkas[idx], caption=f"{berkas[idx].name} · {idx+1}/{len(berkas)}", use_container_width=True)
+        with col_next:
+            if st.button("Selanjutnya ▶", key="b_next", use_container_width=True):
+                st.session_state[idx_key] = min(len(berkas) - 1, idx + 1)
+                st.rerun()
+        st.divider()
+
+    if berkas:
         biaya = f" · {len(berkas)} panggilan AI" if pakai_ai else ""
         if st.button(f"Proses {len(berkas)} foto{biaya}", type="primary"):
             baris, bar = [], st.progress(0.0)
