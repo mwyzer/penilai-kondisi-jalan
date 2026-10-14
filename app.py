@@ -18,8 +18,8 @@ from video import VideoGagal, ambil_frame, gabung_hasil
 
 st.set_page_config(page_title="Penilai Kondisi Jalan", page_icon="🛣️", layout="wide")
 
-MODE_FOTO, MODE_VIDEO = "Foto tunggal", "Video pendek"
-MODE_BANYAK, MODE_IMPOR, MODE_SENSOR = "Beberapa foto", "Impor CSV/GeoJSON", "Sensor getaran"
+MODE_FOTO, MODE_VIDEO = "Single photo", "Short video"
+MODE_BANYAK, MODE_IMPOR, MODE_SENSOR = "Multiple photos", "Import CSV/GeoJSON", "Vibration sensor"
 
 DEFAULTS = {"ruas": "Jl. Contoh Raya", "sta": "2+100", "panjang": 20, "lat": "-6.915110", "lon": "107.610640",
             "retak": 12, "lebar": "1-3 mm", "lubang": 2, "alur": "tidak ada", "waktu_foto": "", "gps_info": None,
